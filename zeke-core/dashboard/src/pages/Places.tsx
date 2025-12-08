@@ -137,7 +137,15 @@ function MiniMap({ lat, lng }: { lat: number; lng: number }) {
   return <div ref={mapRef} className="h-full w-full rounded-lg" />;
 }
 
-function CurrentLocationCard({ locationContext }: { locationContext: LocationContext | null }) {
+function CurrentLocationCard({ 
+  locationContext, 
+  onQuickAdd,
+  isSaving 
+}: { 
+  locationContext: LocationContext | null;
+  onQuickAdd?: (lat: number, lng: number) => void;
+  isSaving?: boolean;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -254,9 +262,30 @@ function CurrentLocationCard({ locationContext }: { locationContext: LocationCon
         )}
       </div>
       
-      <p className="text-slate-400 text-sm mt-3">
-        Location: {locationContext.current_latitude.toFixed(4)}, {locationContext.current_longitude.toFixed(4)}
-      </p>
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-700">
+        <p className="text-slate-400 text-sm">
+          {locationContext.current_latitude.toFixed(4)}, {locationContext.current_longitude.toFixed(4)}
+        </p>
+        {onQuickAdd && (
+          <button
+            onClick={() => onQuickAdd(locationContext.current_latitude, locationContext.current_longitude)}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                Save Location
+              </>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -274,6 +303,7 @@ export function Places() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -329,6 +359,27 @@ export function Places() {
       setRoutines(data);
     } catch (error) {
       console.error('Error fetching routines:', error);
+    }
+  }
+
+  async function handleQuickAdd(lat: number, lng: number) {
+    const name = prompt('Name this location (or leave empty for auto-generated name):');
+    if (name === null) return;
+    
+    setQuickAddSaving(true);
+    try {
+      await placesApi.quickAdd({
+        latitude: lat,
+        longitude: lng,
+        name: name || undefined,
+        category: 'other',
+      });
+      loadPlaces();
+    } catch (error) {
+      console.error('Error quick adding place:', error);
+      alert('Failed to save location. Please try again.');
+    } finally {
+      setQuickAddSaving(false);
     }
   }
 
@@ -476,6 +527,8 @@ export function Places() {
           onRefreshSuggestions={fetchSuggestions}
           onConfirmSuggestion={confirmSuggestion}
           locationContext={locationContext}
+          onQuickAdd={handleQuickAdd}
+          quickAddSaving={quickAddSaving}
         />
       ) : (
         <PlaceDetailView
@@ -514,6 +567,8 @@ function PlacesListView({
   onRefreshSuggestions,
   onConfirmSuggestion,
   locationContext,
+  onQuickAdd,
+  quickAddSaving,
 }: {
   places: Place[];
   onAddPlace: () => void;
@@ -526,6 +581,8 @@ function PlacesListView({
   onRefreshSuggestions: () => void;
   onConfirmSuggestion: (suggestion: PlaceSuggestion) => void;
   locationContext: LocationContext | null;
+  onQuickAdd: (lat: number, lng: number) => void;
+  quickAddSaving: boolean;
 }) {
   return (
     <>
@@ -551,7 +608,11 @@ function PlacesListView({
       </div>
 
       {/* Current Location Card */}
-      <CurrentLocationCard locationContext={locationContext} />
+      <CurrentLocationCard 
+        locationContext={locationContext} 
+        onQuickAdd={onQuickAdd}
+        isSaving={quickAddSaving}
+      />
 
       {places.length === 0 ? (
         <div className="bg-slate-900 rounded-xl p-8 md:p-12 text-center border border-slate-700">

@@ -111,6 +111,55 @@ export interface Place {
   first_visited?: string;
   last_visited?: string;
   is_confirmed: boolean;
+  tags?: string[];
+  list_ids?: string[];
+  trigger_count?: number;
+}
+
+export interface PlaceTag {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+export interface PlaceTrigger {
+  id: string;
+  place_id: string;
+  name: string;
+  trigger_type: 'entry' | 'exit';
+  action_type: 'reminder' | 'mode_switch' | 'notification' | 'task_create';
+  action_payload?: Record<string, unknown>;
+  enabled: boolean;
+  cooldown_minutes: number;
+  last_triggered?: string;
+  created_at: string;
+}
+
+export interface PlaceList {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  place_count: number;
+  created_at: string;
+}
+
+export interface QuickAddPlaceRequest {
+  latitude: number;
+  longitude: number;
+  name?: string;
+  category?: string;
+  tags?: string[];
+}
+
+export interface PlaceTriggerCreate {
+  name: string;
+  trigger_type: 'entry' | 'exit';
+  action_type: 'reminder' | 'mode_switch' | 'notification' | 'task_create';
+  action_payload?: Record<string, unknown>;
+  enabled?: boolean;
+  cooldown_minutes?: number;
 }
 
 export interface PlaceCreate {
@@ -479,6 +528,129 @@ export const placesApi = {
   async checkRoutineDeviation(): Promise<{ is_deviation: boolean; typical_place?: string; current_place?: string; message?: string }> {
     const res = await fetch(`${API_BASE}/places/routines/deviation`);
     if (!res.ok) return { is_deviation: false };
+    return res.json();
+  },
+
+  async quickAdd(data: QuickAddPlaceRequest): Promise<Place> {
+    const res = await fetch(`${API_BASE}/places/quick-add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to quick add place');
+    return res.json();
+  },
+
+  async listTags(): Promise<PlaceTag[]> {
+    const res = await fetch(`${API_BASE}/places/tags`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async createTag(name: string, color?: string): Promise<PlaceTag> {
+    const params = new URLSearchParams({ name });
+    if (color) params.append('color', color);
+    const res = await fetch(`${API_BASE}/places/tags?${params}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to create tag');
+    return res.json();
+  },
+
+  async deleteTag(tagId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/tags/${tagId}`, { method: 'DELETE' });
+    return res.ok;
+  },
+
+  async getPlaceTags(placeId: string): Promise<PlaceTag[]> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/tags`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async addTagToPlace(placeId: string, tagId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/tags/${tagId}`, { method: 'POST' });
+    return res.ok;
+  },
+
+  async removeTagFromPlace(placeId: string, tagId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/tags/${tagId}`, { method: 'DELETE' });
+    return res.ok;
+  },
+
+  async getPlaceTriggers(placeId: string): Promise<PlaceTrigger[]> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/triggers`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async createTrigger(placeId: string, trigger: PlaceTriggerCreate): Promise<PlaceTrigger> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/triggers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(trigger),
+    });
+    if (!res.ok) throw new Error('Failed to create trigger');
+    return res.json();
+  },
+
+  async updateTrigger(placeId: string, triggerId: string, enabled: boolean): Promise<boolean> {
+    const params = new URLSearchParams({ enabled: String(enabled) });
+    const res = await fetch(`${API_BASE}/places/${placeId}/triggers/${triggerId}?${params}`, {
+      method: 'PUT',
+    });
+    return res.ok;
+  },
+
+  async deleteTrigger(placeId: string, triggerId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/triggers/${triggerId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  },
+
+  async listPlaceLists(): Promise<PlaceList[]> {
+    const res = await fetch(`${API_BASE}/places/lists/all`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async createPlaceList(name: string, description?: string, icon?: string, color?: string): Promise<PlaceList> {
+    const res = await fetch(`${API_BASE}/places/lists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description, icon, color }),
+    });
+    if (!res.ok) throw new Error('Failed to create list');
+    return res.json();
+  },
+
+  async deletePlaceList(listId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/lists/${listId}`, { method: 'DELETE' });
+    return res.ok;
+  },
+
+  async getListPlaces(listId: string): Promise<Place[]> {
+    const res = await fetch(`${API_BASE}/places/lists/${listId}/places`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async addPlaceToList(listId: string, placeId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/lists/${listId}/places/${placeId}`, {
+      method: 'POST',
+    });
+    return res.ok;
+  },
+
+  async removePlaceFromList(listId: string, placeId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/places/lists/${listId}/places/${placeId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  },
+
+  async getPlaceLists(placeId: string): Promise<PlaceList[]> {
+    const res = await fetch(`${API_BASE}/places/${placeId}/lists`);
+    if (!res.ok) return [];
     return res.json();
   },
 };
