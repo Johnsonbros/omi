@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     twilio_phone_number: Optional[str] = None
     user_phone_number: Optional[str] = None
     
+    limitless_api_key: Optional[str] = None
+    limitless_sync_enabled: bool = True
+    
     google_calendar_credentials: Optional[str] = None
     openweathermap_api_key: Optional[str] = None
     perplexity_api_key: Optional[str] = None
@@ -28,10 +31,6 @@ class Settings(BaseSettings):
     overland_api_key: Optional[str] = None
     home_location: Optional[str] = None
     location_retention_days: int = 90
-    
-    omi_audio_streaming_enabled: bool = True
-    omi_audio_storage_path: str = "./audio_storage"
-    omi_audio_auto_transcribe: bool = False
     
     user_name: str = "Nate"
     user_timezone: str = "America/New_York"

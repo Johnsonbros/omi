@@ -45,7 +45,6 @@ class OrchestratorContext:
     recent_conversations: Optional[List[str]] = None
     location_context: Optional[LocationContext] = None
     session_context: Optional[SessionContext] = None
-    current_place_name: Optional[str] = None
     
     def __post_init__(self):
         if self.conversation_history is None:
@@ -370,23 +369,6 @@ class SkillOrchestrator:
                         "required": ["entity_name"]
                     }
                 }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_memories_at_place",
-                    "description": "Search memories associated with a specific place or location",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "place_name": {
-                                "type": "string",
-                                "description": "The name of the place (e.g., 'home', 'office', 'gym')"
-                            }
-                        },
-                        "required": ["place_name"]
-                    }
-                }
             }
         ]
     
@@ -418,12 +400,11 @@ class SkillOrchestrator:
                 status_parts.append("Traveling")
             status_info = f" ({', '.join(status_parts)})" if status_parts else ""
             
-            place_info = f"\n- Current place: {context.current_place_name}" if context.current_place_name else ""
             location_context = f"""Current Location Context:
 - Position: {loc.current_latitude:.4f}, {loc.current_longitude:.4f}
 - Motion: {motion_display}{speed_info}
 - Status: {loc.location_description or 'Unknown'}{status_info}{battery_info}
-- Last updated: {loc.last_updated.strftime('%I:%M %p') if loc.last_updated else 'Unknown'}{place_info}
+- Last updated: {loc.last_updated.strftime('%I:%M %p') if loc.last_updated else 'Unknown'}
 """
         
         return f"""You are ZEKE, {settings.user_name}'s personal AI assistant. You are direct, action-oriented, and never fluffy.
@@ -456,7 +437,6 @@ If you need to find past information, use search_memories or search_conversation
 For weather questions, use get_weather or get_weather_forecast.
 For calendar/schedule questions, use get_calendar_events or get_today_schedule.
 For location questions, use get_current_location, get_location_history, or get_motion_summary.
-For questions about what happened at a specific place, use search_memories_at_place.
 """
     
     async def process(self, context: OrchestratorContext) -> OrchestratorResponse:
@@ -479,16 +459,6 @@ For questions about what happened at a specific place, use search_memories_at_pl
         except Exception as e:
             logger.debug(f"Could not fetch location context: {e}")
             context.location_context = None
-        
-        if context.location_context:
-            try:
-                from ..services.place_service import PlaceService
-                place_service = PlaceService()
-                current_place = await place_service.get_current_place(context.user_id)
-                if current_place:
-                    context.current_place_name = current_place.name
-            except Exception as e:
-                logger.debug(f"Could not fetch current place: {e}")
         
         messages = [
             {"role": "system", "content": self._get_system_prompt(context)}
@@ -603,49 +573,19 @@ For questions about what happened at a specific place, use search_memories_at_pl
                 return {"memory_id": memory.id, "stored": True}
             
             elif function_name == "get_weather":
-                location = arguments.get("location")
-                latitude = None
-                longitude = None
-                
-                if not location:
-                    try:
-                        user_location = await self.location_service.get_current(user_id)
-                        if user_location:
-                            latitude = user_location.latitude
-                            longitude = user_location.longitude
-                    except Exception as e:
-                        logger.debug(f"Could not get user location for weather: {e}")
-                
                 weather = await self.weather_client.get_current(
-                    location=location,
-                    latitude=latitude,
-                    longitude=longitude
+                    location=arguments.get("location")
                 )
                 if weather:
                     return {
                         "weather": weather.to_dict(),
                         "summary": weather.summary()
                     }
-                return {"error": "Could not fetch weather data. Please ensure the OpenWeatherMap API key is configured."}
+                return {"error": "Could not fetch weather data"}
             
             elif function_name == "get_weather_forecast":
-                location = arguments.get("location")
-                latitude = None
-                longitude = None
-                
-                if not location:
-                    try:
-                        user_location = await self.location_service.get_current(user_id)
-                        if user_location:
-                            latitude = user_location.latitude
-                            longitude = user_location.longitude
-                    except Exception as e:
-                        logger.debug(f"Could not get user location for forecast: {e}")
-                
                 forecast = await self.weather_client.get_forecast(
-                    location=location,
-                    latitude=latitude,
-                    longitude=longitude,
+                    location=arguments.get("location"),
                     days=arguments.get("days", 5)
                 )
                 if forecast:
@@ -656,7 +596,7 @@ For questions about what happened at a specific place, use search_memories_at_pl
                             for f in forecast
                         ])
                     }
-                return {"error": "Could not fetch weather forecast. Please ensure the OpenWeatherMap API key is configured."}
+                return {"error": "Could not fetch weather forecast"}
             
             elif function_name == "get_calendar_events":
                 events = await self.calendar_client.get_upcoming_events(
@@ -778,27 +718,6 @@ For questions about what happened at a specific place, use search_memories_at_pl
                     "context": result.context
                 }
             
-            elif function_name == "search_memories_at_place":
-                from ..services.place_service import PlaceService
-                place_service = PlaceService()
-                places = await place_service.list_places(user_id)
-                
-                place_name = arguments.get("place_name", "").lower()
-                matching_place = None
-                for p in places:
-                    if place_name in p.name.lower():
-                        matching_place = p
-                        break
-                
-                if matching_place:
-                    memories = await self.memory_service.search_by_place(user_id, matching_place.id)
-                    return {
-                        "place": matching_place.name,
-                        "memories": memories,
-                        "count": len(memories)
-                    }
-                return {"error": f"No place found matching '{place_name}'"}
-            
             else:
                 return {"error": f"Unknown function: {function_name}"}
                 
@@ -827,6 +746,5 @@ For questions about what happened at a specific place, use search_memories_at_pl
             "get_motion_summary": Intent.LOCATION,
             "search_knowledge_graph": Intent.KNOWLEDGE_GRAPH,
             "explore_entity_connections": Intent.KNOWLEDGE_GRAPH,
-            "search_memories_at_place": Intent.QUERY_MEMORY,
         }
         return intent_map.get(first_action, Intent.UNKNOWN)

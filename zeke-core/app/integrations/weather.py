@@ -60,39 +60,22 @@ class WeatherClient:
         self.api_key = api_key or settings.openweathermap_api_key
         self.default_location = default_location or settings.user_location
     
-    async def get_current(
-        self, 
-        location: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None
-    ) -> Optional[WeatherData]:
+    async def get_current(self, location: Optional[str] = None) -> Optional[WeatherData]:
         if not self.api_key:
             logger.warning("OpenWeatherMap API key not configured")
             return None
         
+        location = location or self.default_location
+        
         try:
             async with httpx.AsyncClient() as client:
-                if latitude is not None and longitude is not None:
-                    params = {
-                        "lat": latitude,
-                        "lon": longitude,
-                        "appid": self.api_key,
-                        "units": "imperial"
-                    }
-                else:
-                    location = location or self.default_location
-                    if not location:
-                        logger.warning("No location specified for weather request")
-                        return None
-                    params = {
+                response = await client.get(
+                    f"{self.BASE_URL}/weather",
+                    params={
                         "q": location,
                         "appid": self.api_key,
                         "units": "imperial"
-                    }
-                
-                response = await client.get(
-                    f"{self.BASE_URL}/weather",
-                    params=params,
+                    },
                     timeout=10.0
                 )
                 response.raise_for_status()
@@ -118,39 +101,24 @@ class WeatherClient:
     async def get_forecast(
         self, 
         location: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
         days: int = 5
     ) -> List[ForecastDay]:
         if not self.api_key:
             logger.warning("OpenWeatherMap API key not configured")
             return []
         
+        location = location or self.default_location
+        
         try:
             async with httpx.AsyncClient() as client:
-                if latitude is not None and longitude is not None:
-                    params = {
-                        "lat": latitude,
-                        "lon": longitude,
-                        "appid": self.api_key,
-                        "units": "imperial",
-                        "cnt": days * 8
-                    }
-                else:
-                    location = location or self.default_location
-                    if not location:
-                        logger.warning("No location specified for forecast request")
-                        return []
-                    params = {
+                response = await client.get(
+                    f"{self.BASE_URL}/forecast",
+                    params={
                         "q": location,
                         "appid": self.api_key,
                         "units": "imperial",
                         "cnt": days * 8
-                    }
-                
-                response = await client.get(
-                    f"{self.BASE_URL}/forecast",
-                    params=params,
+                    },
                     timeout=10.0
                 )
                 response.raise_for_status()

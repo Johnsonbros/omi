@@ -12,7 +12,6 @@ from ..core.database import get_db_context
 
 if TYPE_CHECKING:
     from .knowledge_graph_service import KnowledgeGraphService
-    from .place_service import PlaceService
 
 logger = logging.getLogger(__name__)
 
@@ -85,30 +84,8 @@ class MemoryService:
         conversation_id: Optional[str] = None,
         manually_added: bool = False,
         deduplicate: bool = True,
-        extract_graph: bool = True,
-        place_id: Optional[str] = None,
-        place_name: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None
+        extract_graph: bool = True
     ) -> MemoryResponse:
-        if not place_id:
-            try:
-                from .place_service import PlaceService
-                place_service = PlaceService()
-                cached = await place_service.get_current_place_from_cache(user_id)
-                if cached:
-                    place_id = cached.get("place_id")
-                    place_name = cached.get("place_name")
-                else:
-                    current_place = await place_service.get_current_place(user_id)
-                    if current_place:
-                        place_id = current_place.id
-                        place_name = current_place.name
-                        latitude = current_place.latitude
-                        longitude = current_place.longitude
-            except Exception as e:
-                logger.debug(f"Could not get current place: {e}")
-        
         openai_client = self._require_openai()
         embedding = await openai_client.create_embedding(content)
         
@@ -125,11 +102,7 @@ class MemoryService:
                 category=category,
                 conversation_id=conversation_id,
                 manually_added=manually_added,
-                embedding=embedding,
-                place_id=place_id,
-                place_name=place_name,
-                latitude=latitude,
-                longitude=longitude
+                embedding=embedding
             )
             db.add(memory)
             db.flush()
@@ -296,44 +269,22 @@ class MemoryService:
         transcript: str,
         overview: str
     ) -> List[MemoryResponse]:
-        prompt = f"""You are extracting personal memories from a conversation for a user named Nate. 
-These memories will be used to personalize future interactions and help Nate recall important information.
+        prompt = f"""Analyze this conversation and extract important facts, preferences, or learnings about the user.
+Return a JSON array of memories to store. Each memory should be a single, clear fact.
 
 Conversation overview: {overview}
 
 Transcript:
 {transcript[:3000]}
 
-EXTRACT HIGH-QUALITY MEMORIES that are:
-1. SPECIFIC and CONCRETE - Include names, places, dates, numbers, or details
-2. FIRST-PERSON perspective - Write as if Nate is speaking about himself
-3. ACTIONABLE or MEMORABLE - Things worth remembering later
-4. UNIQUE - Not generic observations anyone could make
+Extract memories that are:
+- Personal preferences (food, activities, etc.)
+- Important facts about people mentioned
+- Decisions or plans made
+- Learnings or insights
 
-GOOD MEMORY EXAMPLES:
-- "I prefer my coffee black with no sugar"
-- "Aurora is my daughter who attends Kindergarten at Lincoln Elementary"
-- "I'm working on a product called Eagle Eyes that tracks inventory"
-- "My wife Sarah and I celebrated our anniversary on October 15th"
-- "I use a Navien tankless water heater at my house"
-
-BAD MEMORIES TO AVOID:
-- "The user expresses a desire not to feel a certain way" (too vague, third-person)
-- "The child observes that some entities have ponytails" (not personal, irrelevant)
-- "User has a playful interaction with a child" (third-person, no specific detail)
-- "Someone mentioned something about food" (no specifics)
-
-QUALITY RULES:
-- NEVER use "the user", "the child", "someone" - use Nate, I, my, or specific names
-- NEVER extract vague emotional states without context
-- NEVER extract generic observations that lack specific details
-- DO extract concrete facts, preferences, relationships, plans, and decisions
-- DO include specific names of people, places, products, or things
-
-Return ONLY 1-3 high-quality memories. If nothing worth remembering, return empty array [].
-
-Return JSON array like: [{{"content": "memory text in first person", "category": "interesting"}}]
-Categories: interesting (personal facts/preferences), system (technical/work info)
+Return JSON array like: [{{"content": "memory text", "category": "interesting"}}]
+Categories: interesting, system, manual
 
 Only return the JSON array, no other text."""
 
@@ -429,29 +380,3 @@ Only return the JSON array, no other text."""
             context_parts.append(graph_context)
         
         return "\n".join(context_parts) if context_parts else ""
-    
-    async def search_by_place(
-        self,
-        user_id: str,
-        place_id: str,
-        limit: int = 20
-    ) -> List[dict]:
-        """Get memories associated with a specific place"""
-        with get_db_context() as db:
-            memories = db.query(MemoryDB).filter(
-                and_(
-                    MemoryDB.uid == user_id,
-                    MemoryDB.place_id == place_id
-                )
-            ).order_by(desc(MemoryDB.created_at)).limit(limit).all()
-            
-            return [
-                {
-                    "id": m.id,
-                    "content": m.content,
-                    "category": m.category,
-                    "created_at": str(m.created_at),
-                    "place_name": m.place_name
-                }
-                for m in memories
-            ]

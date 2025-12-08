@@ -101,10 +101,6 @@ localPort = 34971
 externalPort = 5000
 
 [[ports]]
-localPort = 35075
-externalPort = 9000
-
-[[ports]]
 localPort = 37391
 externalPort = 8080
 
@@ -136,16 +132,12 @@ externalPort = 8081
 localPort = 44899
 externalPort = 8008
 
-[[ports]]
-localPort = 46017
-externalPort = 8099
-
 [deployment]
-deploymentTarget = "vm"
-run = ["bash", "-c", "cd zeke-core && python main.py & cd zeke-core/dashboard && npm run preview -- --host 0.0.0.0 --port 5000"]
-build = ["bash", "-c", "cd zeke-core/dashboard && npm install && npm run build"]
+deploymentTarget = "autoscale"
+run = ["bash", "start.sh"]
+build = ["bash", "build.sh"]
 
 [userenv]
 
 [userenv.shared]
-HOME_LOCATION = "42.267,-71.015"
+HOME_LOCATION = "42.1264,-70.9425"

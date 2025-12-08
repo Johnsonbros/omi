@@ -10,4 +10,3 @@ from .context_mode import (
     ContextModeDB, UserContextStateDB, ParkingLotItemDB, TimeSensitiveReminderDB,
     ContextModeType
 )
-from .place import PlaceDB, PlaceVisitDB, PlaceCategory

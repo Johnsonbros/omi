@@ -2,20 +2,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Generator
-import logging
 
 from .config import get_settings
 from ..models.base import Base
 
-logger = logging.getLogger(__name__)
 settings = get_settings()
 
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     pool_size=5,
-    max_overflow=10,
-    connect_args={"connect_timeout": 10}
+    max_overflow=10
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

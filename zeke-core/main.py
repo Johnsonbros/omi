@@ -7,7 +7,7 @@ import subprocess
 import os
 import uvicorn
 
-from app.api import chat, memories, tasks, omi, sms, overland, curation, knowledge_graph, auth, context, places
+from app.api import chat, memories, tasks, omi, sms, overland, curation, knowledge_graph, auth, context
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.events import event_bus, Event, EventTypes
@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _redis_available = False
+_limitless_sync_task = None
 _mcp_server_process = None
+LIMITLESS_SYNC_INTERVAL = 90
 
 
 async def process_conversation_inline(conversation_id: str, user_id: str):
@@ -124,8 +126,38 @@ def stop_mcp_server():
         _mcp_server_process = None
 
 
+async def limitless_sync_loop():
+    from app.integrations.limitless_bridge import LimitlessBridge
+    from app.services.conversation_service import ConversationService
+    
+    await asyncio.sleep(10)
+    
+    while True:
+        try:
+            bridge = LimitlessBridge(
+                conversation_service=ConversationService()
+            )
+            
+            if bridge.is_enabled:
+                synced_ids = await bridge.sync_recent(
+                    user_id="default_user",
+                    hours=1
+                )
+                if synced_ids:
+                    logger.info(f"Limitless auto-sync: {len(synced_ids)} new conversations")
+                else:
+                    logger.debug("Limitless auto-sync: no new conversations")
+            
+        except Exception as e:
+            logger.error(f"Limitless auto-sync error: {e}")
+        
+        await asyncio.sleep(LIMITLESS_SYNC_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _limitless_sync_task
+    
     logger.info("Starting Zeke Core...")
     init_db()
     logger.info("Database initialized")
@@ -134,7 +166,18 @@ async def lifespan(app: FastAPI):
     
     start_mcp_server()
     
+    _limitless_sync_task = asyncio.create_task(limitless_sync_loop())
+    logger.info(f"Limitless auto-sync started (every {LIMITLESS_SYNC_INTERVAL}s)")
+    
     yield
+    
+    if _limitless_sync_task:
+        _limitless_sync_task.cancel()
+        try:
+            await _limitless_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Limitless auto-sync stopped")
     
     stop_mcp_server()
     
@@ -167,7 +210,6 @@ app.include_router(curation.router, prefix="/api")
 app.include_router(knowledge_graph.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(context.router, prefix="/api")
-app.include_router(places.router, prefix="/api/places", tags=["places"])
 
 
 @app.get("/")

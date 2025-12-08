@@ -60,31 +60,17 @@ Preferred communication style: Simple, everyday language.
 ### Zeke Core (Personal AI Assistant)
 - **Purpose**: Proactive task management and skill orchestration.
 - **Stack**: FastAPI, PostgreSQL + pgvector, Celery + Redis workers.
-- **Dashboard**: React + Vite + TailwindCSS with gradient-themed UI, responsive bottom navigation, and dynamic category filtering.
 - **Features**: Memory curation, task planning, research, location awareness (Overland iOS integration).
 - **Semantic Cache**: Optimizes LLM responses via cosine similarity caching.
 - **GraphRAG Knowledge Graph**: Uses entity relationships for multi-hop reasoning on memories.
 - **OAuth2-Style API Scopes**: Granular permission control for integrations.
 - **Resource Lifecycle Management**: Ensures proper cleanup and prevents memory leaks.
 - **Notification Permission System**: Controls plugin notification access.
-- **Memory Curation System**: Automates classification, tagging, and enrichment of memories. Includes a mobile-first swipe-based curation interface (Tinder-like) where users swipe left to save and right to remove memories. Rejected memories prompt for feedback (reason selection + optional details) to create a reinforcement learning loop for improving future curation quality. **Quality Filters**: Automatic detection of low-quality memories (third-person language like "the user", vague phrases, low specificity) with quality scoring (0.0-1.0). Memories with score below 0.5 are auto-flagged for review. Memory extraction prompts generate first-person, specific, actionable content.
-- **Place Intelligence System**: Comprehensive location-aware feature set for geo-contextual AI assistance.
-  - **Places Model**: Named locations with geofence radius, categories (home/work/gym/restaurant/etc.), visit tracking, and dwell time analytics.
-  - **PlaceService**: Haversine-based place detection, Redis-cached current place state, visit lifecycle management (entry/exit/dwell time).
-  - **Overland Integration**: Automatic place detection on GPS location updates, triggers on place entry/exit.
-  - **Location-Linked Data**: Memories auto-tagged with current place, tasks with arrival/departure triggers.
-  - **Place-Aware Chat**: Orchestrator includes place context in conversations, `search_memories_at_place` tool for queries like "What did I do at the gym?"
-  - **Places Dashboard UI**: Full management page with map visualization, visit history, statistics, add/edit/delete places. Features a **Current Location Card** at the top showing live GPS position on an interactive map with motion status, travel status, battery level, and coordinates. **Quick Add** button saves the current location as a new place instantly. **Suggested Places** section displays mini map previews with pin markers for easy location identification.
-  - **Automatic Place Discovery**: Clusters frequently visited GPS coordinates into suggested places using distance-based clustering. Shows visit counts and suggests categories based on visit times. Users can confirm suggestions with one click.
-  - **Routine Detection**: Analyzes visit patterns over 28 days to identify recurring schedules. Detects routines by day-of-week and hour with confidence scoring. Checks for routine deviations ("You're usually at the gym at this time").
-  - **Place Tags**: Colored labels for organizing places (e.g., "outdoor", "quiet", "expensive"). Many-to-many relationship with places. Full CRUD API at `/api/places/tags` and `/api/places/{id}/tags`.
-  - **Place Triggers**: Automated actions on place entry/exit. Supports action types: reminder, notification, mode_switch, task_create. Configurable cooldown to prevent repeated triggering. Full CRUD API at `/api/places/{id}/triggers`.
-  - **Place Lists**: Named collections of places for grouping (e.g., "Workout Spots", "Client Sites", "Favorite Restaurants"). Many-to-many with ordering. Full CRUD API at `/api/places/lists` and `/api/places/lists/{id}/places`.
+- **Memory Curation System**: Automates classification, tagging, and enrichment of memories.
 - **Emotional Memory Context**: Analyzes memories for sentiment (score -1 to +1), emotional weight (0.0-1.0), milestone detection (family moments, personal achievements, creative breakthroughs), and personal significance classification. Emotionally significant memories receive a 30% boost in RAG retrieval.
 - **Personal Life Context Engine**: Time-based context modes (Morning Planning, Family Time, Writing Mode, Work Mode) with automatic switching, proactive briefings (morning/evening), focus support features (drift detection, refocus prompts), and parking lot for capturing tangent ideas during focused work.
 - **Time-Sensitive Reminders**: Dedicated reminder system for urgent items (school pickups, appointments) with lead time notifications and priority levels.
 - **Omi iOS App Integration**: Direct webhook endpoint at `/api/omi/conversation` that receives raw conversation data from the Omi iOS app, processes transcripts, extracts memories, and enables personalized ZEKE interactions.
-- **Real-Time Audio Streaming**: Configurable audio streaming endpoint at `/api/omi/audio` that receives raw PCM audio bytes from Omi devices, stores as WAV files with path traversal protection. Settings: `omi_audio_streaming_enabled`, `omi_audio_storage_path`, `omi_audio_auto_transcribe`.
 
 ### MCP Server
 - **Protocol**: Model Context Protocol for AI tool integration.
