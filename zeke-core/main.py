@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import logging
 import asyncio
@@ -24,7 +22,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _redis_available = False
+_limitless_sync_task = None
 _mcp_server_process = None
+LIMITLESS_SYNC_INTERVAL = 90
 
 
 async def process_conversation_inline(conversation_id: str, user_id: str):
@@ -126,8 +126,38 @@ def stop_mcp_server():
         _mcp_server_process = None
 
 
+async def limitless_sync_loop():
+    from app.integrations.limitless_bridge import LimitlessBridge
+    from app.services.conversation_service import ConversationService
+    
+    await asyncio.sleep(10)
+    
+    while True:
+        try:
+            bridge = LimitlessBridge(
+                conversation_service=ConversationService()
+            )
+            
+            if bridge.is_enabled:
+                synced_ids = await bridge.sync_recent(
+                    user_id="default_user",
+                    hours=1
+                )
+                if synced_ids:
+                    logger.info(f"Limitless auto-sync: {len(synced_ids)} new conversations")
+                else:
+                    logger.debug("Limitless auto-sync: no new conversations")
+            
+        except Exception as e:
+            logger.error(f"Limitless auto-sync error: {e}")
+        
+        await asyncio.sleep(LIMITLESS_SYNC_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _limitless_sync_task
+    
     logger.info("Starting Zeke Core...")
     init_db()
     logger.info("Database initialized")
@@ -136,7 +166,18 @@ async def lifespan(app: FastAPI):
     
     start_mcp_server()
     
+    _limitless_sync_task = asyncio.create_task(limitless_sync_loop())
+    logger.info(f"Limitless auto-sync started (every {LIMITLESS_SYNC_INTERVAL}s)")
+    
     yield
+    
+    if _limitless_sync_task:
+        _limitless_sync_task.cancel()
+        try:
+            await _limitless_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Limitless auto-sync stopped")
     
     stop_mcp_server()
     
@@ -172,40 +213,24 @@ app.include_router(context.router, prefix="/api")
 app.include_router(places.router, prefix="/api/places", tags=["places"])
 
 
+@app.get("/")
+async def root():
+    return {
+        "name": "Zeke Core",
+        "status": "running",
+        "version": "1.0.0"
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
 
-dashboard_dist = os.path.join(os.path.dirname(__file__), "dashboard", "dist")
-if os.path.exists(dashboard_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(dashboard_dist, "assets")), name="static-assets")
-    
-    @app.get("/")
-    async def serve_spa_root():
-        return FileResponse(os.path.join(dashboard_dist, "index.html"))
-    
-    @app.get("/{path:path}")
-    async def serve_spa(path: str):
-        file_path = os.path.join(dashboard_dist, path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(dashboard_dist, "index.html"))
-else:
-    @app.get("/")
-    async def root():
-        return {
-            "name": "Zeke Core",
-            "status": "running",
-            "version": "1.0.0"
-        }
-
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=port,
+        port=8000,
         reload=settings.debug
     )

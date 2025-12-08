@@ -1,6 +1,5 @@
 import threading
-from typing import List, Any
-from datetime import datetime
+from typing import List
 import os
 import requests
 import time
@@ -21,19 +20,6 @@ from utils.llm.clients import generate_embedding
 from utils.llm.proactive_notification import get_proactive_message
 from database.vector_db import query_vectors_by_metadata
 import database.conversations as conversations_db
-
-
-def _json_serialize_datetime(obj: Any) -> Any:
-    """Helper function to recursively convert datetime objects to ISO format strings for JSON serialization"""
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    elif isinstance(obj, dict):
-        return {key: _json_serialize_datetime(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [_json_serialize_datetime(item) for item in obj]
-    else:
-        return obj
-
 
 PROACTIVE_NOTI_LIMIT_SECONDS = 30  # 1 noti / 30s
 
@@ -115,10 +101,9 @@ def trigger_external_integrations(uid: str, conversation: Conversation) -> list:
             url += '?uid=' + uid
 
         try:
-            payload = _json_serialize_datetime(conversation_dict)
             response = requests.post(
                 url,
-                json=payload,
+                json=conversation_dict,
                 timeout=30,
             )  # TODO: failing?
             if response.status_code != 200:
