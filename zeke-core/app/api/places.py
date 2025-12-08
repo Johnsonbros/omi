@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from datetime import datetime
 import logging
+import uuid
 
 from ..services.place_service import PlaceService
 from ..models.place import (
@@ -10,7 +11,19 @@ from ..models.place import (
     PlaceResponse,
     PlaceVisitResponse,
     PlaceCategory,
-    PlaceContext
+    PlaceContext,
+    QuickAddPlaceRequest,
+    PlaceTagDB,
+    PlaceTagLinkDB,
+    PlaceTriggerDB,
+    PlaceListDB,
+    PlaceListMemberDB,
+    PlaceTagResponse,
+    PlaceTriggerResponse,
+    PlaceTriggerCreate,
+    PlaceListResponse,
+    PlaceListCreate,
+    PlaceDB
 )
 from ..core.database import get_db_context
 from ..models.place import PlaceVisitDB
@@ -228,3 +241,349 @@ async def get_place_visits(
                 raise HTTPException(status_code=404, detail="Place not found")
         
         return [PlaceVisitResponse.model_validate(v) for v in visits]
+
+
+@router.post("/quick-add", response_model=PlaceResponse)
+async def quick_add_place(
+    request: QuickAddPlaceRequest,
+    place_service: PlaceService = Depends(get_place_service)
+):
+    """Quick add a place from current location with minimal info."""
+    name = request.name or f"Location {datetime.now().strftime('%b %d %I:%M%p')}"
+    
+    place = await place_service.create_place(
+        uid=USER_ID,
+        name=name,
+        latitude=request.latitude,
+        longitude=request.longitude,
+        radius_meters=100.0,
+        category=request.category,
+        is_auto_detected=False,
+        metadata_json={"created_via": "quick_add"}
+    )
+    
+    if request.tags:
+        with get_db_context() as db:
+            for tag_name in request.tags:
+                tag = db.query(PlaceTagDB).filter(
+                    PlaceTagDB.uid == USER_ID,
+                    PlaceTagDB.name == tag_name
+                ).first()
+                if not tag:
+                    tag = PlaceTagDB(
+                        id=str(uuid.uuid4()),
+                        uid=USER_ID,
+                        name=tag_name
+                    )
+                    db.add(tag)
+                    db.flush()
+                
+                link = PlaceTagLinkDB(place_id=place.id, tag_id=tag.id)
+                db.add(link)
+    
+    logger.info(f"Quick added place: {place.name} (id={place.id})")
+    return place
+
+
+@router.get("/tags", response_model=List[PlaceTagResponse])
+async def list_tags():
+    """List all tags for the user."""
+    with get_db_context() as db:
+        tags = db.query(PlaceTagDB).filter(PlaceTagDB.uid == USER_ID).all()
+        return [PlaceTagResponse.model_validate(t) for t in tags]
+
+
+@router.post("/tags", response_model=PlaceTagResponse)
+async def create_tag(name: str, color: Optional[str] = None):
+    """Create a new tag."""
+    with get_db_context() as db:
+        existing = db.query(PlaceTagDB).filter(
+            PlaceTagDB.uid == USER_ID,
+            PlaceTagDB.name == name
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Tag already exists")
+        
+        tag = PlaceTagDB(
+            id=str(uuid.uuid4()),
+            uid=USER_ID,
+            name=name,
+            color=color
+        )
+        db.add(tag)
+        db.flush()
+        return PlaceTagResponse.model_validate(tag)
+
+
+@router.delete("/tags/{tag_id}")
+async def delete_tag(tag_id: str):
+    """Delete a tag."""
+    with get_db_context() as db:
+        tag = db.query(PlaceTagDB).filter(
+            PlaceTagDB.id == tag_id,
+            PlaceTagDB.uid == USER_ID
+        ).first()
+        if not tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+        db.delete(tag)
+        return {"message": "Tag deleted"}
+
+
+@router.get("/{place_id}/tags", response_model=List[PlaceTagResponse])
+async def get_place_tags(place_id: str):
+    """Get all tags for a place."""
+    with get_db_context() as db:
+        place = db.query(PlaceDB).filter(PlaceDB.id == place_id).first()
+        if not place:
+            raise HTTPException(status_code=404, detail="Place not found")
+        return [PlaceTagResponse.model_validate(t) for t in place.tags]
+
+
+@router.post("/{place_id}/tags/{tag_id}")
+async def add_tag_to_place(place_id: str, tag_id: str):
+    """Add a tag to a place."""
+    with get_db_context() as db:
+        place = db.query(PlaceDB).filter(PlaceDB.id == place_id).first()
+        tag = db.query(PlaceTagDB).filter(PlaceTagDB.id == tag_id).first()
+        if not place or not tag:
+            raise HTTPException(status_code=404, detail="Place or tag not found")
+        
+        existing = db.query(PlaceTagLinkDB).filter(
+            PlaceTagLinkDB.place_id == place_id,
+            PlaceTagLinkDB.tag_id == tag_id
+        ).first()
+        if not existing:
+            link = PlaceTagLinkDB(place_id=place_id, tag_id=tag_id)
+            db.add(link)
+        return {"message": "Tag added to place"}
+
+
+@router.delete("/{place_id}/tags/{tag_id}")
+async def remove_tag_from_place(place_id: str, tag_id: str):
+    """Remove a tag from a place."""
+    with get_db_context() as db:
+        link = db.query(PlaceTagLinkDB).filter(
+            PlaceTagLinkDB.place_id == place_id,
+            PlaceTagLinkDB.tag_id == tag_id
+        ).first()
+        if link:
+            db.delete(link)
+        return {"message": "Tag removed from place"}
+
+
+@router.get("/{place_id}/triggers", response_model=List[PlaceTriggerResponse])
+async def get_place_triggers(place_id: str):
+    """Get all triggers for a place."""
+    with get_db_context() as db:
+        triggers = db.query(PlaceTriggerDB).filter(
+            PlaceTriggerDB.place_id == place_id
+        ).all()
+        return [PlaceTriggerResponse.model_validate(t) for t in triggers]
+
+
+@router.post("/{place_id}/triggers", response_model=PlaceTriggerResponse)
+async def create_place_trigger(place_id: str, trigger: PlaceTriggerCreate):
+    """Create a new trigger for a place."""
+    with get_db_context() as db:
+        place = db.query(PlaceDB).filter(PlaceDB.id == place_id).first()
+        if not place:
+            raise HTTPException(status_code=404, detail="Place not found")
+        
+        new_trigger = PlaceTriggerDB(
+            id=str(uuid.uuid4()),
+            uid=USER_ID,
+            place_id=place_id,
+            name=trigger.name,
+            trigger_type=trigger.trigger_type.value,
+            action_type=trigger.action_type.value,
+            action_payload=trigger.action_payload,
+            enabled=trigger.enabled,
+            cooldown_minutes=trigger.cooldown_minutes
+        )
+        db.add(new_trigger)
+        db.flush()
+        logger.info(f"Created trigger: {new_trigger.name} for place {place_id}")
+        return PlaceTriggerResponse.model_validate(new_trigger)
+
+
+@router.put("/{place_id}/triggers/{trigger_id}")
+async def update_trigger(place_id: str, trigger_id: str, enabled: bool):
+    """Enable or disable a trigger."""
+    with get_db_context() as db:
+        trigger = db.query(PlaceTriggerDB).filter(
+            PlaceTriggerDB.id == trigger_id,
+            PlaceTriggerDB.place_id == place_id
+        ).first()
+        if not trigger:
+            raise HTTPException(status_code=404, detail="Trigger not found")
+        trigger.enabled = enabled
+        return {"message": "Trigger updated"}
+
+
+@router.delete("/{place_id}/triggers/{trigger_id}")
+async def delete_trigger(place_id: str, trigger_id: str):
+    """Delete a trigger."""
+    with get_db_context() as db:
+        trigger = db.query(PlaceTriggerDB).filter(
+            PlaceTriggerDB.id == trigger_id,
+            PlaceTriggerDB.place_id == place_id
+        ).first()
+        if not trigger:
+            raise HTTPException(status_code=404, detail="Trigger not found")
+        db.delete(trigger)
+        return {"message": "Trigger deleted"}
+
+
+@router.get("/lists/all", response_model=List[PlaceListResponse])
+async def list_place_lists():
+    """List all place lists for the user."""
+    with get_db_context() as db:
+        lists = db.query(PlaceListDB).filter(PlaceListDB.uid == USER_ID).all()
+        result = []
+        for lst in lists:
+            count = db.query(PlaceListMemberDB).filter(
+                PlaceListMemberDB.list_id == lst.id
+            ).count()
+            resp = PlaceListResponse(
+                id=lst.id,
+                name=lst.name,
+                description=lst.description,
+                icon=lst.icon,
+                color=lst.color,
+                place_count=count,
+                created_at=lst.created_at
+            )
+            result.append(resp)
+        return result
+
+
+@router.post("/lists", response_model=PlaceListResponse)
+async def create_place_list(list_data: PlaceListCreate):
+    """Create a new place list."""
+    with get_db_context() as db:
+        existing = db.query(PlaceListDB).filter(
+            PlaceListDB.uid == USER_ID,
+            PlaceListDB.name == list_data.name
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="List already exists")
+        
+        new_list = PlaceListDB(
+            id=str(uuid.uuid4()),
+            uid=USER_ID,
+            name=list_data.name,
+            description=list_data.description,
+            icon=list_data.icon,
+            color=list_data.color
+        )
+        db.add(new_list)
+        db.flush()
+        return PlaceListResponse(
+            id=new_list.id,
+            name=new_list.name,
+            description=new_list.description,
+            icon=new_list.icon,
+            color=new_list.color,
+            place_count=0,
+            created_at=new_list.created_at
+        )
+
+
+@router.delete("/lists/{list_id}")
+async def delete_place_list(list_id: str):
+    """Delete a place list."""
+    with get_db_context() as db:
+        lst = db.query(PlaceListDB).filter(
+            PlaceListDB.id == list_id,
+            PlaceListDB.uid == USER_ID
+        ).first()
+        if not lst:
+            raise HTTPException(status_code=404, detail="List not found")
+        db.delete(lst)
+        return {"message": "List deleted"}
+
+
+@router.get("/lists/{list_id}/places", response_model=List[PlaceResponse])
+async def get_list_places(
+    list_id: str,
+    place_service: PlaceService = Depends(get_place_service)
+):
+    """Get all places in a list."""
+    with get_db_context() as db:
+        lst = db.query(PlaceListDB).filter(PlaceListDB.id == list_id).first()
+        if not lst:
+            raise HTTPException(status_code=404, detail="List not found")
+        
+        place_ids = [m.place_id for m in db.query(PlaceListMemberDB).filter(
+            PlaceListMemberDB.list_id == list_id
+        ).all()]
+        
+        places = []
+        for pid in place_ids:
+            place = await place_service.get_place(pid)
+            if place:
+                places.append(place)
+        return places
+
+
+@router.post("/lists/{list_id}/places/{place_id}")
+async def add_place_to_list(list_id: str, place_id: str):
+    """Add a place to a list."""
+    with get_db_context() as db:
+        lst = db.query(PlaceListDB).filter(PlaceListDB.id == list_id).first()
+        place = db.query(PlaceDB).filter(PlaceDB.id == place_id).first()
+        if not lst or not place:
+            raise HTTPException(status_code=404, detail="List or place not found")
+        
+        existing = db.query(PlaceListMemberDB).filter(
+            PlaceListMemberDB.list_id == list_id,
+            PlaceListMemberDB.place_id == place_id
+        ).first()
+        if not existing:
+            member = PlaceListMemberDB(list_id=list_id, place_id=place_id)
+            db.add(member)
+        return {"message": "Place added to list"}
+
+
+@router.delete("/lists/{list_id}/places/{place_id}")
+async def remove_place_from_list(list_id: str, place_id: str):
+    """Remove a place from a list."""
+    with get_db_context() as db:
+        member = db.query(PlaceListMemberDB).filter(
+            PlaceListMemberDB.list_id == list_id,
+            PlaceListMemberDB.place_id == place_id
+        ).first()
+        if member:
+            db.delete(member)
+        return {"message": "Place removed from list"}
+
+
+@router.get("/{place_id}/lists", response_model=List[PlaceListResponse])
+async def get_place_lists(place_id: str):
+    """Get all lists a place belongs to."""
+    with get_db_context() as db:
+        place = db.query(PlaceDB).filter(PlaceDB.id == place_id).first()
+        if not place:
+            raise HTTPException(status_code=404, detail="Place not found")
+        
+        list_ids = [m.list_id for m in db.query(PlaceListMemberDB).filter(
+            PlaceListMemberDB.place_id == place_id
+        ).all()]
+        
+        result = []
+        for lid in list_ids:
+            lst = db.query(PlaceListDB).filter(PlaceListDB.id == lid).first()
+            if lst:
+                count = db.query(PlaceListMemberDB).filter(
+                    PlaceListMemberDB.list_id == lid
+                ).count()
+                result.append(PlaceListResponse(
+                    id=lst.id,
+                    name=lst.name,
+                    description=lst.description,
+                    icon=lst.icon,
+                    color=lst.color,
+                    place_count=count,
+                    created_at=lst.created_at
+                ))
+        return result
