@@ -171,6 +171,50 @@ async def check_routine_deviation(
     return deviation or {"is_deviation": False}
 
 
+@router.get("/tags", response_model=List[PlaceTagResponse])
+async def list_tags():
+    """List all tags for the user."""
+    with get_db_context() as db:
+        tags = db.query(PlaceTagDB).filter(PlaceTagDB.uid == USER_ID).all()
+        return [PlaceTagResponse.model_validate(t) for t in tags]
+
+
+@router.post("/tags", response_model=PlaceTagResponse)
+async def create_tag(name: str, color: Optional[str] = None):
+    """Create a new tag."""
+    with get_db_context() as db:
+        existing = db.query(PlaceTagDB).filter(
+            PlaceTagDB.uid == USER_ID,
+            PlaceTagDB.name == name
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Tag already exists")
+        
+        tag = PlaceTagDB(
+            id=str(uuid.uuid4()),
+            uid=USER_ID,
+            name=name,
+            color=color
+        )
+        db.add(tag)
+        db.flush()
+        return PlaceTagResponse.model_validate(tag)
+
+
+@router.delete("/tags/{tag_id}")
+async def delete_tag(tag_id: str):
+    """Delete a tag."""
+    with get_db_context() as db:
+        tag = db.query(PlaceTagDB).filter(
+            PlaceTagDB.id == tag_id,
+            PlaceTagDB.uid == USER_ID
+        ).first()
+        if not tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+        db.delete(tag)
+        return {"message": "Tag deleted"}
+
+
 @router.get("/{place_id}", response_model=PlaceResponse)
 async def get_place(
     place_id: str,
@@ -283,50 +327,6 @@ async def quick_add_place(
     
     logger.info(f"Quick added place: {place.name} (id={place.id})")
     return place
-
-
-@router.get("/tags", response_model=List[PlaceTagResponse])
-async def list_tags():
-    """List all tags for the user."""
-    with get_db_context() as db:
-        tags = db.query(PlaceTagDB).filter(PlaceTagDB.uid == USER_ID).all()
-        return [PlaceTagResponse.model_validate(t) for t in tags]
-
-
-@router.post("/tags", response_model=PlaceTagResponse)
-async def create_tag(name: str, color: Optional[str] = None):
-    """Create a new tag."""
-    with get_db_context() as db:
-        existing = db.query(PlaceTagDB).filter(
-            PlaceTagDB.uid == USER_ID,
-            PlaceTagDB.name == name
-        ).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Tag already exists")
-        
-        tag = PlaceTagDB(
-            id=str(uuid.uuid4()),
-            uid=USER_ID,
-            name=name,
-            color=color
-        )
-        db.add(tag)
-        db.flush()
-        return PlaceTagResponse.model_validate(tag)
-
-
-@router.delete("/tags/{tag_id}")
-async def delete_tag(tag_id: str):
-    """Delete a tag."""
-    with get_db_context() as db:
-        tag = db.query(PlaceTagDB).filter(
-            PlaceTagDB.id == tag_id,
-            PlaceTagDB.uid == USER_ID
-        ).first()
-        if not tag:
-            raise HTTPException(status_code=404, detail="Tag not found")
-        db.delete(tag)
-        return {"message": "Tag deleted"}
 
 
 @router.get("/{place_id}/tags", response_model=List[PlaceTagResponse])

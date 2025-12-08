@@ -4,9 +4,10 @@ import {
   Home, Building2, Dumbbell, GraduationCap, UtensilsCrossed, 
   ShoppingBag, Stethoscope, Users, User, MoreHorizontal,
   ChevronLeft, BarChart3, Navigation, Timer, Lightbulb, TrendingUp, RefreshCw, Check,
-  Battery, Compass
+  Battery, Compass, Tag, Zap, List, LogIn, LogOut, Bell, Settings, CheckSquare, 
+  ToggleLeft, ToggleRight, FolderPlus
 } from 'lucide-react';
-import { placesApi, api, type Place, type PlaceCreate, type PlaceStats, type PlaceVisit, type PlaceSuggestion, type Routine, type LocationContext } from '../lib/api';
+import { placesApi, api, type Place, type PlaceCreate, type PlaceStats, type PlaceVisit, type PlaceSuggestion, type Routine, type LocationContext, type PlaceTag, type PlaceTrigger, type PlaceList, type PlaceTriggerCreate } from '../lib/api';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -304,6 +305,8 @@ export function Places() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
   const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [allTags, setAllTags] = useState<PlaceTag[]>([]);
+  const [placeLists, setPlaceLists] = useState<PlaceList[]>([]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -319,6 +322,8 @@ export function Places() {
     fetchSuggestions();
     fetchRoutines();
     fetchLocationContext();
+    fetchTags();
+    fetchPlaceLists();
   }, []);
 
   async function fetchLocationContext() {
@@ -328,6 +333,34 @@ export function Places() {
     } catch (error) {
       console.error('Error fetching location context:', error);
     }
+  }
+
+  async function fetchTags() {
+    try {
+      const data = await placesApi.listTags();
+      setAllTags(data);
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+    }
+  }
+
+  async function fetchPlaceLists() {
+    try {
+      const data = await placesApi.listPlaceLists();
+      setPlaceLists(data);
+    } catch (error) {
+      console.error('Error fetching place lists:', error);
+    }
+  }
+
+  async function handleCreateList(name: string, description?: string) {
+    await placesApi.createPlaceList(name, description);
+    fetchPlaceLists();
+  }
+
+  async function handleDeleteList(listId: string) {
+    await placesApi.deletePlaceList(listId);
+    fetchPlaceLists();
   }
 
   async function loadPlaces() {
@@ -529,6 +562,10 @@ export function Places() {
           locationContext={locationContext}
           onQuickAdd={handleQuickAdd}
           quickAddSaving={quickAddSaving}
+          allTags={allTags}
+          placeLists={placeLists}
+          onCreateList={handleCreateList}
+          onDeleteList={handleDeleteList}
         />
       ) : (
         <PlaceDetailView
@@ -537,6 +574,11 @@ export function Places() {
           onBack={handleBackToList}
           onEdit={() => handleOpenModal(selectedPlace!)}
           onDelete={() => handleDelete(selectedPlace!.id)}
+          allTags={allTags}
+          placeLists={placeLists}
+          onTagsChange={fetchTags}
+          onListsChange={fetchPlaceLists}
+          onPlaceUpdate={loadPlaces}
         />
       )}
 
@@ -569,6 +611,10 @@ function PlacesListView({
   locationContext,
   onQuickAdd,
   quickAddSaving,
+  allTags,
+  placeLists,
+  onCreateList,
+  onDeleteList,
 }: {
   places: Place[];
   onAddPlace: () => void;
@@ -583,6 +629,10 @@ function PlacesListView({
   locationContext: LocationContext | null;
   onQuickAdd: (lat: number, lng: number) => void;
   quickAddSaving: boolean;
+  allTags: PlaceTag[];
+  placeLists: PlaceList[];
+  onCreateList: (name: string, description?: string) => Promise<void>;
+  onDeleteList: (listId: string) => Promise<void>;
 }) {
   return (
     <>
@@ -636,10 +686,18 @@ function PlacesListView({
               onSelect={() => onSelectPlace(place)}
               onEdit={() => onEditPlace(place)}
               onDelete={() => onDeletePlace(place.id)}
+              tags={allTags}
             />
           ))}
         </div>
       )}
+
+      {/* Place Lists Section */}
+      <PlaceListsSection
+        placeLists={placeLists}
+        onCreateList={onCreateList}
+        onDeleteList={onDeleteList}
+      />
 
       {/* Suggested Places Section */}
       <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 md:p-6">
@@ -773,18 +831,155 @@ function RoutineCard({ routine }: { routine: Routine }) {
   );
 }
 
+function PlaceListsSection({
+  placeLists,
+  onCreateList,
+  onDeleteList,
+}: {
+  placeLists: PlaceList[];
+  onCreateList: (name: string, description?: string) => Promise<void>;
+  onDeleteList: (listId: string) => Promise<void>;
+}) {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [newListDescription, setNewListDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newListName.trim() || creating) return;
+    setCreating(true);
+    try {
+      await onCreateList(newListName.trim(), newListDescription.trim() || undefined);
+      setNewListName('');
+      setNewListDescription('');
+      setShowCreateForm(false);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const LIST_COLORS = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <List className="w-5 h-5 text-blue-400" />
+          Place Lists
+        </h2>
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+        >
+          <FolderPlus className="w-4 h-4" />
+          New List
+        </button>
+      </div>
+
+      {showCreateForm && (
+        <form onSubmit={handleCreate} className="bg-slate-800 rounded-lg p-4 mb-4 space-y-3">
+          <input
+            type="text"
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            placeholder="List name (e.g., Workout Spots)"
+            className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+            autoFocus
+          />
+          <input
+            type="text"
+            value={newListDescription}
+            onChange={(e) => setNewListDescription(e.target.value)}
+            placeholder="Description (optional)"
+            className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setShowCreateForm(false)}
+              className="px-3 py-1.5 text-slate-400 hover:text-white text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!newListName.trim() || creating}
+              className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-500 disabled:opacity-50"
+            >
+              {creating ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {placeLists.length === 0 ? (
+        <div className="text-center py-4">
+          <p className="text-slate-400">No lists created yet.</p>
+          <p className="text-slate-500 text-sm mt-1">Create lists to organize your places.</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {placeLists.map((list, index) => (
+            <div
+              key={list.id}
+              className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="p-2 rounded-lg"
+                    style={{ backgroundColor: `${list.color || LIST_COLORS[index % LIST_COLORS.length]}20` }}
+                  >
+                    <List
+                      className="w-5 h-5"
+                      style={{ color: list.color || LIST_COLORS[index % LIST_COLORS.length] }}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium">{list.name}</h3>
+                    <p className="text-slate-500 text-xs">
+                      {list.place_count} {list.place_count === 1 ? 'place' : 'places'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete list "${list.name}"?`)) {
+                      onDeleteList(list.id);
+                    }
+                  }}
+                  className="p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              {list.description && (
+                <p className="text-slate-400 text-sm mt-2">{list.description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlaceCard({
   place,
   onSelect,
   onEdit,
   onDelete,
+  tags,
 }: {
   place: Place;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  tags: PlaceTag[];
 }) {
   const CategoryIcon = getCategoryIcon(place.category);
+  const placeTags = tags.filter(t => place.tags?.includes(t.id));
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden hover:border-purple-500/50 transition-colors group">
@@ -813,6 +1008,27 @@ function PlaceCard({
           )}
         </div>
 
+        {placeTags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {placeTags.slice(0, 4).map(tag => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: `${tag.color || '#8b5cf6'}20`,
+                  color: tag.color || '#8b5cf6',
+                }}
+              >
+                <Tag className="w-3 h-3" />
+                {tag.name}
+              </span>
+            ))}
+            {placeTags.length > 4 && (
+              <span className="text-xs text-slate-400">+{placeTags.length - 4} more</span>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="bg-slate-800 rounded-lg p-3">
             <div className="flex items-center gap-1.5 text-slate-500 text-xs mb-1">
@@ -834,6 +1050,13 @@ function PlaceCard({
           <div className="mt-3 flex items-center gap-1.5 text-slate-500 text-sm">
             <Calendar className="w-4 h-4" />
             Last visited: {formatDate(place.last_visited)}
+          </div>
+        )}
+
+        {(place.trigger_count ?? 0) > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 text-amber-500 text-sm">
+            <Zap className="w-4 h-4" />
+            {place.trigger_count} {place.trigger_count === 1 ? 'trigger' : 'triggers'} active
           </div>
         )}
       </button>
@@ -865,15 +1088,172 @@ function PlaceDetailView({
   onBack,
   onEdit,
   onDelete,
+  allTags,
+  placeLists,
+  onTagsChange,
+  onListsChange,
+  onPlaceUpdate,
 }: {
   place: Place;
   stats: PlaceStats | null;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  allTags: PlaceTag[];
+  placeLists: PlaceList[];
+  onTagsChange: () => void;
+  onListsChange: () => void;
+  onPlaceUpdate: () => void;
 }) {
   const CategoryIcon = getCategoryIcon(place.category);
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  const [placeTags, setPlaceTags] = useState<PlaceTag[]>([]);
+  const [triggers, setTriggers] = useState<PlaceTrigger[]>([]);
+  const [currentLists, setCurrentLists] = useState<PlaceList[]>([]);
+  const [loadingTags, setLoadingTags] = useState(true);
+  const [loadingTriggers, setLoadingTriggers] = useState(true);
+  const [loadingLists, setLoadingLists] = useState(true);
+  
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#8b5cf6');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [creatingTag, setCreatingTag] = useState(false);
+  
+  const [showTriggerForm, setShowTriggerForm] = useState(false);
+  const [newTrigger, setNewTrigger] = useState<PlaceTriggerCreate>({
+    name: '',
+    trigger_type: 'entry',
+    action_type: 'notification',
+    enabled: true,
+    cooldown_minutes: 30,
+  });
+  const [creatingTrigger, setCreatingTrigger] = useState(false);
+  
+  const TAG_COLORS = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#06b6d4', '#84cc16'];
+  
+  useEffect(() => {
+    loadPlaceTags();
+    loadTriggers();
+    loadCurrentLists();
+  }, [place.id]);
+  
+  async function loadPlaceTags() {
+    setLoadingTags(true);
+    try {
+      const tags = await placesApi.getPlaceTags(place.id);
+      setPlaceTags(tags);
+    } catch (error) {
+      console.error('Error loading place tags:', error);
+    } finally {
+      setLoadingTags(false);
+    }
+  }
+  
+  async function loadTriggers() {
+    setLoadingTriggers(true);
+    try {
+      const data = await placesApi.getPlaceTriggers(place.id);
+      setTriggers(data);
+    } catch (error) {
+      console.error('Error loading triggers:', error);
+    } finally {
+      setLoadingTriggers(false);
+    }
+  }
+  
+  async function loadCurrentLists() {
+    setLoadingLists(true);
+    try {
+      const lists = await placesApi.getPlaceLists(place.id);
+      setCurrentLists(lists);
+    } catch (error) {
+      console.error('Error loading place lists:', error);
+    } finally {
+      setLoadingLists(false);
+    }
+  }
+  
+  async function handleAddTag(tagId: string) {
+    await placesApi.addTagToPlace(place.id, tagId);
+    loadPlaceTags();
+    onPlaceUpdate();
+  }
+  
+  async function handleRemoveTag(tagId: string) {
+    await placesApi.removeTagFromPlace(place.id, tagId);
+    loadPlaceTags();
+    onPlaceUpdate();
+  }
+  
+  async function handleCreateAndAddTag() {
+    if (!newTagName.trim() || creatingTag) return;
+    setCreatingTag(true);
+    try {
+      const tag = await placesApi.createTag(newTagName.trim(), newTagColor);
+      await placesApi.addTagToPlace(place.id, tag.id);
+      setNewTagName('');
+      setShowTagInput(false);
+      loadPlaceTags();
+      onTagsChange();
+      onPlaceUpdate();
+    } catch (error) {
+      console.error('Error creating tag:', error);
+    } finally {
+      setCreatingTag(false);
+    }
+  }
+  
+  async function handleToggleTrigger(triggerId: string, enabled: boolean) {
+    await placesApi.updateTrigger(place.id, triggerId, enabled);
+    loadTriggers();
+  }
+  
+  async function handleDeleteTrigger(triggerId: string) {
+    if (!confirm('Delete this trigger?')) return;
+    await placesApi.deleteTrigger(place.id, triggerId);
+    loadTriggers();
+    onPlaceUpdate();
+  }
+  
+  async function handleCreateTrigger(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newTrigger.name.trim() || creatingTrigger) return;
+    setCreatingTrigger(true);
+    try {
+      await placesApi.createTrigger(place.id, newTrigger);
+      setNewTrigger({ name: '', trigger_type: 'entry', action_type: 'notification', enabled: true, cooldown_minutes: 30 });
+      setShowTriggerForm(false);
+      loadTriggers();
+      onPlaceUpdate();
+    } catch (error) {
+      console.error('Error creating trigger:', error);
+    } finally {
+      setCreatingTrigger(false);
+    }
+  }
+  
+  async function handleAddToList(listId: string) {
+    await placesApi.addPlaceToList(listId, place.id);
+    loadCurrentLists();
+    onListsChange();
+  }
+  
+  async function handleRemoveFromList(listId: string) {
+    await placesApi.removePlaceFromList(listId, place.id);
+    loadCurrentLists();
+    onListsChange();
+  }
+  
+  const availableTags = allTags.filter(t => !placeTags.some(pt => pt.id === t.id));
+  const availableLists = placeLists.filter(l => !currentLists.some(cl => cl.id === l.id));
+  
+  const ACTION_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
+    notification: { label: 'Notification', icon: <Bell className="w-4 h-4" /> },
+    reminder: { label: 'Reminder', icon: <Clock className="w-4 h-4" /> },
+    mode_switch: { label: 'Mode Switch', icon: <Settings className="w-4 h-4" /> },
+    task_create: { label: 'Create Task', icon: <CheckSquare className="w-4 h-4" /> },
+  };
 
   return (
     <>
@@ -956,6 +1336,296 @@ function PlaceDetailView({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Tags Section */}
+      <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Tag className="w-5 h-5 text-pink-400" />
+            Tags
+          </h3>
+          <button
+            onClick={() => setShowTagInput(!showTagInput)}
+            className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
+          >
+            <Plus className="w-4 h-4" />
+            Add Tag
+          </button>
+        </div>
+        
+        {loadingTags ? (
+          <p className="text-slate-400 text-sm">Loading tags...</p>
+        ) : (
+          <>
+            {placeTags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {placeTags.map(tag => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium group"
+                    style={{
+                      backgroundColor: `${tag.color || '#8b5cf6'}20`,
+                      color: tag.color || '#8b5cf6',
+                    }}
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    {tag.name}
+                    <button
+                      onClick={() => handleRemoveTag(tag.id)}
+                      className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            {showTagInput && (
+              <div className="bg-slate-800 rounded-lg p-4 space-y-3">
+                {availableTags.length > 0 && (
+                  <div>
+                    <p className="text-slate-400 text-xs mb-2">Existing tags:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map(tag => (
+                        <button
+                          key={tag.id}
+                          onClick={() => handleAddTag(tag.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          style={{
+                            backgroundColor: `${tag.color || '#8b5cf6'}20`,
+                            color: tag.color || '#8b5cf6',
+                          }}
+                        >
+                          <Plus className="w-3 h-3" />
+                          {tag.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="border-t border-slate-700 pt-3">
+                  <p className="text-slate-400 text-xs mb-2">Or create new:</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      placeholder="Tag name"
+                      className="flex-1 bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+                    />
+                    <div className="flex gap-1">
+                      {TAG_COLORS.slice(0, 4).map(color => (
+                        <button
+                          key={color}
+                          onClick={() => setNewTagColor(color)}
+                          className={`w-8 h-8 rounded-lg border-2 transition-all ${newTagColor === color ? 'border-white scale-110' : 'border-transparent'}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleCreateAndAddTag}
+                      disabled={!newTagName.trim() || creatingTag}
+                      className="px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-500 disabled:opacity-50"
+                    >
+                      {creatingTag ? '...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {placeTags.length === 0 && !showTagInput && (
+              <p className="text-slate-500 text-sm">No tags assigned to this place.</p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Triggers Section */}
+      <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-400" />
+            Triggers
+          </h3>
+          <button
+            onClick={() => setShowTriggerForm(!showTriggerForm)}
+            className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
+          >
+            <Plus className="w-4 h-4" />
+            New Trigger
+          </button>
+        </div>
+        
+        {loadingTriggers ? (
+          <p className="text-slate-400 text-sm">Loading triggers...</p>
+        ) : (
+          <>
+            {showTriggerForm && (
+              <form onSubmit={handleCreateTrigger} className="bg-slate-800 rounded-lg p-4 mb-4 space-y-3">
+                <input
+                  type="text"
+                  value={newTrigger.name}
+                  onChange={(e) => setNewTrigger({ ...newTrigger, name: e.target.value })}
+                  placeholder="Trigger name (e.g., Gym Reminder)"
+                  className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">When:</label>
+                    <select
+                      value={newTrigger.trigger_type}
+                      onChange={(e) => setNewTrigger({ ...newTrigger, trigger_type: e.target.value as 'entry' | 'exit' })}
+                      className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+                    >
+                      <option value="entry">On Entry</option>
+                      <option value="exit">On Exit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Action:</label>
+                    <select
+                      value={newTrigger.action_type}
+                      onChange={(e) => setNewTrigger({ ...newTrigger, action_type: e.target.value as PlaceTriggerCreate['action_type'] })}
+                      className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-purple-500 text-sm"
+                    >
+                      <option value="notification">Notification</option>
+                      <option value="reminder">Reminder</option>
+                      <option value="mode_switch">Mode Switch</option>
+                      <option value="task_create">Create Task</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowTriggerForm(false)}
+                    className="px-3 py-1.5 text-slate-400 hover:text-white text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newTrigger.name.trim() || creatingTrigger}
+                    className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-500 disabled:opacity-50"
+                  >
+                    {creatingTrigger ? 'Creating...' : 'Create'}
+                  </button>
+                </div>
+              </form>
+            )}
+            
+            {triggers.length > 0 ? (
+              <div className="space-y-2">
+                {triggers.map(trigger => (
+                  <div
+                    key={trigger.id}
+                    className="bg-slate-800 rounded-lg p-4 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${trigger.trigger_type === 'entry' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                        {trigger.trigger_type === 'entry' ? (
+                          <LogIn className={`w-4 h-4 ${trigger.trigger_type === 'entry' ? 'text-green-400' : 'text-red-400'}`} />
+                        ) : (
+                          <LogOut className="w-4 h-4 text-red-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{trigger.name}</p>
+                        <p className="text-slate-400 text-xs flex items-center gap-1.5">
+                          <span className={trigger.trigger_type === 'entry' ? 'text-green-400' : 'text-red-400'}>
+                            On {trigger.trigger_type}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 text-amber-400">
+                            {ACTION_TYPE_LABELS[trigger.action_type]?.icon}
+                            {ACTION_TYPE_LABELS[trigger.action_type]?.label}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleToggleTrigger(trigger.id, !trigger.enabled)}
+                        className={`p-1.5 rounded-lg transition-colors ${trigger.enabled ? 'text-green-400 bg-green-500/10' : 'text-slate-500 bg-slate-700'}`}
+                      >
+                        {trigger.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTrigger(trigger.id)}
+                        className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              !showTriggerForm && <p className="text-slate-500 text-sm">No triggers set for this place.</p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Lists Section */}
+      <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 md:p-6">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+          <List className="w-5 h-5 text-blue-400" />
+          Lists
+        </h3>
+        
+        {loadingLists ? (
+          <p className="text-slate-400 text-sm">Loading lists...</p>
+        ) : (
+          <>
+            {currentLists.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {currentLists.map(list => (
+                  <span
+                    key={list.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400 group"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    {list.name}
+                    <button
+                      onClick={() => handleRemoveFromList(list.id)}
+                      className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            {availableLists.length > 0 && (
+              <div>
+                <p className="text-slate-400 text-xs mb-2">Add to list:</p>
+                <div className="flex flex-wrap gap-2">
+                  {availableLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={() => handleAddToList(list.id)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {list.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {currentLists.length === 0 && availableLists.length === 0 && (
+              <p className="text-slate-500 text-sm">No lists available. Create lists from the Places page.</p>
+            )}
+          </>
+        )}
       </div>
 
       {stats && stats.visits_by_day && Object.keys(stats.visits_by_day).length > 0 && (
