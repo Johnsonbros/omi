@@ -141,9 +141,9 @@ localPort = 46017
 externalPort = 8099
 
 [deployment]
-deploymentTarget = "autoscale"
-run = ["bash", "start.sh"]
-build = ["bash", "build.sh"]
+deploymentTarget = "vm"
+run = ["bash", "-c", "cd zeke-core && python main.py & cd zeke-core/dashboard && npm run preview -- --host 0.0.0.0 --port 5000"]
+build = ["bash", "-c", "cd zeke-core/dashboard && npm ci --omit=dev && npm run build"]
 
 [userenv]
 
