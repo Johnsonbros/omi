@@ -269,22 +269,44 @@ class MemoryService:
         transcript: str,
         overview: str
     ) -> List[MemoryResponse]:
-        prompt = f"""Analyze this conversation and extract important facts, preferences, or learnings about the user.
-Return a JSON array of memories to store. Each memory should be a single, clear fact.
+        prompt = f"""You are extracting personal memories from a conversation for a user named Nate. 
+These memories will be used to personalize future interactions and help Nate recall important information.
 
 Conversation overview: {overview}
 
 Transcript:
 {transcript[:3000]}
 
-Extract memories that are:
-- Personal preferences (food, activities, etc.)
-- Important facts about people mentioned
-- Decisions or plans made
-- Learnings or insights
+EXTRACT HIGH-QUALITY MEMORIES that are:
+1. SPECIFIC and CONCRETE - Include names, places, dates, numbers, or details
+2. FIRST-PERSON perspective - Write as if Nate is speaking about himself
+3. ACTIONABLE or MEMORABLE - Things worth remembering later
+4. UNIQUE - Not generic observations anyone could make
 
-Return JSON array like: [{{"content": "memory text", "category": "interesting"}}]
-Categories: interesting, system, manual
+GOOD MEMORY EXAMPLES:
+- "I prefer my coffee black with no sugar"
+- "Aurora is my daughter who attends Kindergarten at Lincoln Elementary"
+- "I'm working on a product called Eagle Eyes that tracks inventory"
+- "My wife Sarah and I celebrated our anniversary on October 15th"
+- "I use a Navien tankless water heater at my house"
+
+BAD MEMORIES TO AVOID:
+- "The user expresses a desire not to feel a certain way" (too vague, third-person)
+- "The child observes that some entities have ponytails" (not personal, irrelevant)
+- "User has a playful interaction with a child" (third-person, no specific detail)
+- "Someone mentioned something about food" (no specifics)
+
+QUALITY RULES:
+- NEVER use "the user", "the child", "someone" - use Nate, I, my, or specific names
+- NEVER extract vague emotional states without context
+- NEVER extract generic observations that lack specific details
+- DO extract concrete facts, preferences, relationships, plans, and decisions
+- DO include specific names of people, places, products, or things
+
+Return ONLY 1-3 high-quality memories. If nothing worth remembering, return empty array [].
+
+Return JSON array like: [{{"content": "memory text in first person", "category": "interesting"}}]
+Categories: interesting (personal facts/preferences), system (technical/work info)
 
 Only return the JSON array, no other text."""
 
