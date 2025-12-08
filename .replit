@@ -148,4 +148,4 @@ build = ["bash", "build.sh"]
 [userenv]
 
 [userenv.shared]
-HOME_LOCATION = "42.1264,-70.9425"
+HOME_LOCATION = "42.267,-71.015"
