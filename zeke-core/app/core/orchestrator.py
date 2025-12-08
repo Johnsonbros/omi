@@ -573,19 +573,49 @@ For location questions, use get_current_location, get_location_history, or get_m
                 return {"memory_id": memory.id, "stored": True}
             
             elif function_name == "get_weather":
+                location = arguments.get("location")
+                latitude = None
+                longitude = None
+                
+                if not location:
+                    try:
+                        user_location = await self.location_service.get_current(user_id)
+                        if user_location:
+                            latitude = user_location.latitude
+                            longitude = user_location.longitude
+                    except Exception as e:
+                        logger.debug(f"Could not get user location for weather: {e}")
+                
                 weather = await self.weather_client.get_current(
-                    location=arguments.get("location")
+                    location=location,
+                    latitude=latitude,
+                    longitude=longitude
                 )
                 if weather:
                     return {
                         "weather": weather.to_dict(),
                         "summary": weather.summary()
                     }
-                return {"error": "Could not fetch weather data"}
+                return {"error": "Could not fetch weather data. Please ensure the OpenWeatherMap API key is configured."}
             
             elif function_name == "get_weather_forecast":
+                location = arguments.get("location")
+                latitude = None
+                longitude = None
+                
+                if not location:
+                    try:
+                        user_location = await self.location_service.get_current(user_id)
+                        if user_location:
+                            latitude = user_location.latitude
+                            longitude = user_location.longitude
+                    except Exception as e:
+                        logger.debug(f"Could not get user location for forecast: {e}")
+                
                 forecast = await self.weather_client.get_forecast(
-                    location=arguments.get("location"),
+                    location=location,
+                    latitude=latitude,
+                    longitude=longitude,
                     days=arguments.get("days", 5)
                 )
                 if forecast:
@@ -596,7 +626,7 @@ For location questions, use get_current_location, get_location_history, or get_m
                             for f in forecast
                         ])
                     }
-                return {"error": "Could not fetch weather forecast"}
+                return {"error": "Could not fetch weather forecast. Please ensure the OpenWeatherMap API key is configured."}
             
             elif function_name == "get_calendar_events":
                 events = await self.calendar_client.get_upcoming_events(
