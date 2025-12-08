@@ -74,7 +74,7 @@ Preferred communication style: Simple, everyday language.
   - **Overland Integration**: Automatic place detection on GPS location updates, triggers on place entry/exit.
   - **Location-Linked Data**: Memories auto-tagged with current place, tasks with arrival/departure triggers.
   - **Place-Aware Chat**: Orchestrator includes place context in conversations, `search_memories_at_place` tool for queries like "What did I do at the gym?"
-  - **Places Dashboard UI**: Full management page with map visualization, visit history, statistics, add/edit/delete places.
+  - **Places Dashboard UI**: Full management page with map visualization, visit history, statistics, add/edit/delete places. Features a **Current Location Card** at the top showing live GPS position on an interactive map with motion status, travel status, battery level, and coordinates. **Suggested Places** section displays mini map previews with pin markers for easy location identification.
   - **Automatic Place Discovery**: Clusters frequently visited GPS coordinates into suggested places using distance-based clustering. Shows visit counts and suggests categories based on visit times. Users can confirm suggestions with one click.
   - **Routine Detection**: Analyzes visit patterns over 28 days to identify recurring schedules. Detects routines by day-of-week and hour with confidence scoring. Checks for routine deviations ("You're usually at the gym at this time").
 - **Emotional Memory Context**: Analyzes memories for sentiment (score -1 to +1), emotional weight (0.0-1.0), milestone detection (family moments, personal achievements, creative breakthroughs), and personal significance classification. Emotionally significant memories receive a 30% boost in RAG retrieval.
