@@ -3,9 +3,10 @@ import {
   MapPin, Plus, Trash2, Edit2, X, Clock, Calendar, 
   Home, Building2, Dumbbell, GraduationCap, UtensilsCrossed, 
   ShoppingBag, Stethoscope, Users, User, MoreHorizontal,
-  ChevronLeft, BarChart3, Navigation, Timer, Lightbulb, TrendingUp, RefreshCw, Check
+  ChevronLeft, BarChart3, Navigation, Timer, Lightbulb, TrendingUp, RefreshCw, Check,
+  Battery, Compass
 } from 'lucide-react';
-import { placesApi, api, type Place, type PlaceCreate, type PlaceStats, type PlaceVisit, type PlaceSuggestion, type Routine } from '../lib/api';
+import { placesApi, api, type Place, type PlaceCreate, type PlaceStats, type PlaceVisit, type PlaceSuggestion, type Routine, type LocationContext } from '../lib/api';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -95,6 +96,171 @@ function PlaceMap({ lat, lng, radius }: { lat: number; lng: number; radius: numb
   return <div ref={mapRef} className="h-full w-full rounded-lg" />;
 }
 
+function MiniMap({ lat, lng }: { lat: number; lng: number }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        touchZoom: false,
+      }).setView([lat, lng], 15);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstanceRef.current);
+
+      const icon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+      });
+
+      L.marker([lat, lng], { icon }).addTo(mapInstanceRef.current);
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [lat, lng]);
+
+  return <div ref={mapRef} className="h-full w-full rounded-lg" />;
+}
+
+function CurrentLocationCard({ locationContext }: { locationContext: LocationContext | null }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !locationContext) return;
+
+    const lat = locationContext.current_latitude;
+    const lng = locationContext.current_longitude;
+
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: true,
+      }).setView([lat, lng], 15);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(mapInstanceRef.current);
+
+      const icon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+      });
+
+      markerRef.current = L.marker([lat, lng], { icon }).addTo(mapInstanceRef.current);
+    } else {
+      mapInstanceRef.current.setView([lat, lng], 15);
+      markerRef.current?.setLatLng([lat, lng]);
+    }
+  }, [locationContext]);
+
+  if (!locationContext) {
+    return (
+      <div className="bg-slate-900 rounded-xl p-4 md:p-6 border border-slate-700">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="w-5 h-5 text-purple-400" />
+          <h2 className="text-lg font-semibold text-white">Location</h2>
+        </div>
+        <div className="text-center py-8">
+          <Compass className="w-12 h-12 text-slate-600 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-400">Waiting for location data...</p>
+          <p className="text-slate-500 text-sm mt-1">Make sure Overland is running on your phone</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900 rounded-xl p-4 md:p-6 border border-slate-700">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-purple-400" />
+          Location
+        </h2>
+        <span className="text-xs text-slate-500">
+          {new Date(locationContext.last_updated).toLocaleTimeString()}
+        </span>
+      </div>
+      
+      <div className="h-48 md:h-56 rounded-lg overflow-hidden mb-4">
+        <div ref={mapRef} className="h-full w-full" />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-purple-400 mb-1">
+            <Navigation className="w-4 h-4" />
+            <span className="text-xs">Motion</span>
+          </div>
+          <p className="text-slate-200 font-medium capitalize">{locationContext.current_motion}</p>
+        </div>
+        <div className="bg-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-blue-400 mb-1">
+            <MapPin className="w-4 h-4" />
+            <span className="text-xs">Status</span>
+          </div>
+          <p className="text-slate-200 font-medium">
+            {locationContext.is_at_home ? 'At Home' : locationContext.is_traveling ? 'Traveling' : 'Away'}
+          </p>
+        </div>
+        {locationContext.current_speed !== null && locationContext.current_speed > 0 && (
+          <div className="bg-slate-800 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-green-400 mb-1">
+              <Navigation className="w-4 h-4" />
+              <span className="text-xs">Speed</span>
+            </div>
+            <p className="text-slate-200 font-medium">{Math.round(locationContext.current_speed * 2.237)} mph</p>
+          </div>
+        )}
+        {locationContext.battery_level !== null && (
+          <div className="bg-slate-800 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-yellow-400 mb-1">
+              <Battery className="w-4 h-4" />
+              <span className="text-xs">Battery</span>
+            </div>
+            <p className="text-slate-200 font-medium">
+              {Math.round(locationContext.battery_level * 100)}%
+            </p>
+          </div>
+        )}
+      </div>
+      
+      <p className="text-slate-400 text-sm mt-3">
+        Location: {locationContext.current_latitude.toFixed(4)}, {locationContext.current_longitude.toFixed(4)}
+      </p>
+    </div>
+  );
+}
+
 export function Places() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +273,7 @@ export function Places() {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -121,7 +288,17 @@ export function Places() {
     loadPlaces();
     fetchSuggestions();
     fetchRoutines();
+    fetchLocationContext();
   }, []);
+
+  async function fetchLocationContext() {
+    try {
+      const data = await api.getLocationContext();
+      setLocationContext(data);
+    } catch (error) {
+      console.error('Error fetching location context:', error);
+    }
+  }
 
   async function loadPlaces() {
     try {
@@ -298,6 +475,7 @@ export function Places() {
           loadingSuggestions={loadingSuggestions}
           onRefreshSuggestions={fetchSuggestions}
           onConfirmSuggestion={confirmSuggestion}
+          locationContext={locationContext}
         />
       ) : (
         <PlaceDetailView
@@ -335,6 +513,7 @@ function PlacesListView({
   loadingSuggestions,
   onRefreshSuggestions,
   onConfirmSuggestion,
+  locationContext,
 }: {
   places: Place[];
   onAddPlace: () => void;
@@ -346,6 +525,7 @@ function PlacesListView({
   loadingSuggestions: boolean;
   onRefreshSuggestions: () => void;
   onConfirmSuggestion: (suggestion: PlaceSuggestion) => void;
+  locationContext: LocationContext | null;
 }) {
   return (
     <>
@@ -369,6 +549,9 @@ function PlacesListView({
           <span className="hidden md:inline">Add Place</span>
         </button>
       </div>
+
+      {/* Current Location Card */}
+      <CurrentLocationCard locationContext={locationContext} />
 
       {places.length === 0 ? (
         <div className="bg-slate-900 rounded-xl p-8 md:p-12 text-center border border-slate-700">
@@ -469,30 +652,30 @@ function SuggestionCard({
   const CategoryIcon = getCategoryIcon(suggestion.suggested_category);
   
   return (
-    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-yellow-500/50 transition-colors">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-yellow-500/20 rounded-lg">
-            <CategoryIcon className="w-5 h-5 text-yellow-400" />
-          </div>
+    <div className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-yellow-500/50 transition-colors">
+      <div className="h-32 relative">
+        <MiniMap lat={suggestion.latitude} lng={suggestion.longitude} />
+        <div className="absolute top-2 left-2 p-1.5 bg-yellow-500/90 rounded-lg shadow-lg">
+          <CategoryIcon className="w-4 h-4 text-white" />
+        </div>
+      </div>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <span className="text-sm text-yellow-400 font-medium uppercase tracking-wide">
               {getCategoryLabel(suggestion.suggested_category)}
             </span>
             <p className="text-white font-semibold">{suggestion.visit_count} visits</p>
+            <p className="text-slate-500 text-xs mt-1">Last seen: {formatDate(suggestion.last_seen)}</p>
           </div>
+          <button
+            onClick={onConfirm}
+            className="flex items-center gap-1 bg-yellow-600 text-white px-3 py-1.5 rounded-lg hover:bg-yellow-700 transition-colors text-sm flex-shrink-0"
+          >
+            <Check className="w-4 h-4" />
+            Save
+          </button>
         </div>
-        <button
-          onClick={onConfirm}
-          className="flex items-center gap-1 bg-yellow-600 text-white px-3 py-1.5 rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-        >
-          <Check className="w-4 h-4" />
-          Save
-        </button>
-      </div>
-      <div className="mt-3 text-sm text-slate-400">
-        <p>📍 {suggestion.latitude.toFixed(4)}, {suggestion.longitude.toFixed(4)}</p>
-        <p className="mt-1">Last seen: {formatDate(suggestion.last_seen)}</p>
       </div>
     </div>
   );
