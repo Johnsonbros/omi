@@ -1,0 +1,75 @@
+# Python dependencies and cache (installed fresh during build)
+.pythonlibs/
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+*.egg-info/
+*.egg
+venv/
+myenv/
+
+# Git (not needed in deployment)
+.git/
+
+# Node modules (installed during build) - match all nested
+**/node_modules/
+
+# Development files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.log
+.DS_Store
+
+# Flutter/mobile app directories (not needed for web deployment)
+app/
+sdks/
+plugins/
+omi/
+omiGlass/
+
+# Documentation
+docs/
+
+# Backend directories (not needed for frontend deployment)
+backend/
+zeke-core/
+mcp/
+
+# Test files
+test/
+tests/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Build artifacts (rebuilt during deployment)
+.next/
+dist/
+build/
+.dart_tool/
+
+# Large media files
+*.mov
+*.MOV
+*.mp4
+*.avi
+*.wav
+*.mp3
+*.bin
+*.SLDPRT
+*.SLDASM
+
+# Misc
+*.zip
+dump/
+attached_assets/
