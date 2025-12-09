@@ -1,47 +1,56 @@
+# Mobile app (not needed for deployment)
+app/
+
+# Omi firmware and hardware (not needed)
+omi/
+omiGlass/
+
+# Omi web frontend (not deploying this)
+web/
+
+# SDKs (not needed for deployment)
+sdks/
+
+# Plugins (not needed)
+plugins/
+
+# Backend services (using zeke-core instead)
+backend/
+
+# MCP server (optional, can be excluded)
+mcp/
+
+# Documentation
+docs/
+
 # Dependencies (reinstalled during build)
 **/node_modules/
 node_modules/
 
-# Python
+# Python cache
 .pythonlibs/
 __pycache__/
 *.pyc
 *.pyo
 venv/
 myenv/
+.venv/
 
 # Git
 .git/
 .gitignore
 
-# Cache
+# Cache and build artifacts
 .cache/
 .next/
 .npm/
 .yarn/
-
-# Build artifacts
 dist/
 build/
 
 # IDE
 .idea/
 .vscode/
-
-# Mobile app directories (not needed for web)
-app/
-sdks/
-plugins/
-omi/
-omiGlass/
-
-# Backend (not needed for frontend deployment)
-backend/
-zeke-core/
-mcp/
-
-# Documentation
-docs/
 
 # Tests
 test/
@@ -60,9 +69,11 @@ tests/
 *.mp3
 *.bin
 *.zip
+*.tar.gz
 
 # Misc
 dump/
+dump.rdb
 attached_assets/
 *.log
 *.tmp
@@ -74,3 +85,10 @@ attached_assets/
 .env*
 !.env.example
 lefthook.yml
+codemagic.yaml
+
+# Replit specific (not needed in deployment)
+replit.md
+.replit
+.upm/
+.config/

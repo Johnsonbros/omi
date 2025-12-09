@@ -133,7 +133,7 @@ localPort = 44899
 externalPort = 8008
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 run = ["bash", "start.sh"]
 build = ["bash", "build.sh"]
 

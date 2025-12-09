@@ -1,0 +1,23 @@
+# Dependencies (reinstalled during build)
+dashboard/node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Build artifacts
+dashboard/dist/
+
+# Development files
+.env
+.env.local
+*.log
+celerybeat-schedule
+
+# IDE
+.idea/
+.vscode/
+
+# Audio storage (temporary files)
+audio_storage/
