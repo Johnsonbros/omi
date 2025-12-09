@@ -103,6 +103,7 @@ dist/
 *.swp
 *.tmp
 hs_err_pid*
+dump.rdb
 
 # Servers
 src/recordings
